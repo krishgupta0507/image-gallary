@@ -1,0 +1,757 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lens & Canvas — Interactive Gallery</title>
+    
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            500: '#06b6d4',
+                            600: '#0891b2',
+                            700: '#0e7490',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            transition: background-color 0.3s ease, color 0.3s ease;
+        }
+
+        /* Glassmorphism effects */
+        .glass-panel {
+            background: rgba(255, 255, 255, 0.7);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.3);
+        }
+        .dark .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .glass-nav {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+        .dark .glass-nav {
+            background: rgba(15, 23, 42, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+        }
+
+        /* Smooth card scale animations */
+        .gallery-card {
+            transition: transform 0.4s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.4s ease;
+        }
+        .gallery-card:hover {
+            transform: translateY(-6px);
+        }
+        
+        .gallery-card img {
+            transition: transform 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .gallery-card:hover img {
+            transform: scale(1.08);
+        }
+
+        /* Custom scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.05);
+        }
+        .dark ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.05);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #0891b2;
+            border-radius: 4px;
+        }
+
+        /* Filter tab indicator active style */
+        .filter-btn.active {
+            background-color: #0891b2;
+            color: #ffffff;
+            box-shadow: 0 4px 14px rgba(8, 145, 178, 0.35);
+        }
+
+        /* Hide notification banner by default */
+        #toast {
+            transition: transform 0.3s ease, opacity 0.3s ease;
+        }
+
+        /* Lightbox Image Zoom toggle */
+        .zoomed-image {
+            cursor: zoom-out !important;
+            transform: scale(1.5) !important;
+        }
+    </style>
+</head>
+<body class="bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 min-h-screen flex flex-col antialiased selection:bg-brand-500 selection:text-white">
+
+    <!-- Top Navigation Header -->
+    <header class="sticky top-0 z-30 glass-nav border-b border-slate-200/50 dark:border-slate-800/50 transition-colors">
+        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-20 flex items-center justify-between gap-4">
+            <!-- Brand Logo -->
+            <div class="flex items-center space-x-3 cursor-pointer" onclick="resetGallery()">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-cyan-500 to-blue-600 flex items-center justify-center text-white shadow-lg shadow-cyan-500/30">
+                    <i class="fa-solid font-bold fa-camera-retro text-lg"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold tracking-tight bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-200 dark:to-slate-400 bg-clip-text text-transparent">Lens & Canvas</h1>
+                    <p class="text-xs text-slate-500 dark:text-slate-400 font-medium hidden sm:block">Curated Visual Showcase</p>
+                </div>
+            </div>
+
+            <!-- Header Search Bar -->
+            <div class="flex-1 max-w-md mx-4">
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 text-sm"></i>
+                    <input type="text" id="searchInput" placeholder="Search photos by title, tag, or photographer..." 
+                           class="w-full pl-10 pr-10 py-2.5 rounded-full bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-sm focus:outline-none focus:ring-2 focus:ring-brand-500 transition-all placeholder:text-slate-400 dark:placeholder:text-slate-500">
+                    <button id="clearSearchBtn" class="hidden absolute right-3.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 text-sm">
+                        <i class="fa-solid fa-circle-xmark"></i>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Theme Toggle & Stats -->
+            <div class="flex items-center space-x-2">
+                <button id="themeToggle" class="p-2.5 rounded-full hover:bg-slate-200/60 dark:hover:bg-slate-800 text-slate-600 dark:text-slate-300 transition-colors focus:outline-none" title="Toggle Light/Dark Theme">
+                    <i id="themeIcon" class="fa-solid fa-moon text-lg"></i>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <main class="flex-grow max-w-7xl w-full mx-auto px-4 sm:px-6 lg:px-8 py-8">
+        <!-- Hero Section -->
+        <section class="text-center my-6 md:my-10 space-y-3">
+            <h2 class="text-3xl md:text-5xl font-extrabold tracking-tight text-slate-900 dark:text-white">
+                Explore Extraordinary <span class="bg-gradient-to-r from-cyan-500 to-blue-500 bg-clip-text text-transparent">Visuals</span>
+            </h2>
+            <p class="text-slate-600 dark:text-slate-400 text-base md:text-lg max-w-2xl mx-auto font-normal">
+                Discover high-resolution photographs carefully curated for designers, creators, and art enthusiasts.
+            </p>
+        </section>
+
+        <!-- Category Filter Bar -->
+        <section class="mb-10">
+            <div class="flex items-center justify-start md:justify-center overflow-x-auto pb-4 pt-2 gap-2 scrollbar-none" id="categoriesContainer">
+                <button class="filter-btn active px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 whitespace-nowrap bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700" data-category="all">
+                    <i class="fa-solid fa-layer-group mr-1.5 text-xs"></i> All
+                </button>
+                <button class="filter-btn px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 whitespace-nowrap bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700" data-category="Nature">
+                    <i class="fa-solid fa-tree mr-1.5 text-xs"></i> Nature
+                </button>
+                <button class="filter-btn px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 whitespace-nowrap bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700" data-category="Architecture">
+                    <i class="fa-solid fa-building mr-1.5 text-xs"></i> Architecture
+                </button>
+                <button class="filter-btn px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 whitespace-nowrap bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700" data-category="Portraits">
+                    <i class="fa-solid fa-user mr-1.5 text-xs"></i> Portraits
+                </button>
+                <button class="filter-btn px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 whitespace-nowrap bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700" data-category="Urban">
+                    <i class="fa-solid fa-city mr-1.5 text-xs"></i> Urban
+                </button>
+                <button class="filter-btn px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 whitespace-nowrap bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700" data-category="Wildlife">
+                    <i class="fa-solid fa-paw mr-1.5 text-xs"></i> Wildlife
+                </button>
+                <button class="filter-btn px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 whitespace-nowrap bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700" data-category="Abstract">
+                    <i class="fa-solid fa-shapes mr-1.5 text-xs"></i> Abstract
+                </button>
+                <button class="filter-btn px-5 py-2.5 rounded-full text-sm font-semibold transition-all duration-300 whitespace-nowrap bg-slate-200/70 dark:bg-slate-800 text-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-700" data-category="favorites">
+                    <i class="fa-solid fa-heart text-red-500 mr-1.5 text-xs"></i> Favorites (<span id="favCount">0</span>)
+                </button>
+            </div>
+        </section>
+
+        <!-- Gallery Grid Container -->
+        <section>
+            <div id="galleryGrid" class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+                <!-- Gallery Item Cards Render Dynamic Content via JavaScript -->
+            </div>
+
+            <!-- Empty State Message -->
+            <div id="emptyState" class="hidden py-16 text-center space-y-4">
+                <div class="w-16 h-16 mx-auto rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-400 text-2xl">
+                    <i class="fa-solid fa-image-slash"></i>
+                </div>
+                <h3 class="text-xl font-semibold text-slate-700 dark:text-slate-300">No photos found</h3>
+                <p class="text-sm text-slate-500 dark:text-slate-400 max-w-sm mx-auto">Try adjusting your search terms or category selection to find what you're looking for.</p>
+                <button onclick="resetGallery()" class="px-4 py-2 rounded-lg bg-brand-600 text-white font-medium text-sm hover:bg-brand-700 transition">
+                    Clear Filters
+                </button>
+            </div>
+        </section>
+    </main>
+
+    <!-- Lightbox Modal -->
+    <div id="lightboxModal" class="fixed inset-0 z-50 hidden opacity-0 transition-opacity duration-300 bg-slate-950/90 backdrop-blur-md flex flex-col justify-between p-4 sm:p-6 overflow-hidden select-none">
+        <!-- Top Toolbar -->
+        <div class="flex items-center justify-between text-white z-10">
+            <div class="flex items-center space-x-3">
+                <span id="lbCounter" class="text-xs sm:text-sm font-semibold px-3 py-1.5 rounded-full bg-white/10 backdrop-blur border border-white/10 text-slate-300">
+                    Image 1 of 12
+                </span>
+                <span id="lbCategory" class="text-xs font-semibold uppercase tracking-wider px-2.5 py-1 rounded-md bg-brand-600 text-white">
+                    Category
+                </span>
+            </div>
+
+            <div class="flex items-center space-x-2">
+                <!-- Zoom Toggle -->
+                <button id="lbZoomBtn" class="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition focus:outline-none" title="Zoom In/Out">
+                    <i class="fa-solid fa-magnifying-glass-plus text-base"></i>
+                </button>
+                <!-- Favorite Toggle in Lightbox -->
+                <button id="lbFavBtn" class="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition focus:outline-none" title="Toggle Favorite">
+                    <i class="fa-regular fa-heart text-base"></i>
+                </button>
+                <!-- Close Button -->
+                <button id="lbCloseBtn" class="p-2.5 rounded-full bg-white/10 hover:bg-white/20 text-white transition focus:outline-none" title="Close (Esc)">
+                    <i class="fa-solid fa-xmark text-lg"></i>
+                </button>
+            </div>
+        </div>
+
+        <!-- Center Image Stage with Navigation -->
+        <div class="relative flex-1 flex items-center justify-center my-4 overflow-hidden">
+            <!-- Prev Button -->
+            <button id="lbPrevBtn" class="absolute left-2 sm:left-6 z-20 p-3 sm:p-4 rounded-full bg-slate-900/60 hover:bg-slate-900/90 text-white border border-white/10 transition-all transform hover:scale-110 focus:outline-none">
+                <i class="fa-solid fa-chevron-left text-lg sm:text-xl"></i>
+            </button>
+
+            <!-- Main Display Image Container -->
+            <div class="relative max-w-full max-h-full flex items-center justify-center overflow-auto p-2" id="lbImageContainer">
+                <img id="lbImage" src="" alt="" class="max-h-[75vh] max-w-[85vw] object-contain rounded-lg shadow-2xl transition-transform duration-300 ease-out cursor-zoom-in">
+            </div>
+
+            <!-- Next Button -->
+            <button id="lbNextBtn" class="absolute right-2 sm:right-6 z-20 p-3 sm:p-4 rounded-full bg-slate-900/60 hover:bg-slate-900/90 text-white border border-white/10 transition-all transform hover:scale-110 focus:outline-none">
+                <i class="fa-solid fa-chevron-right text-lg sm:text-xl"></i>
+            </button>
+        </div>
+
+        <!-- Bottom Metadata Footer -->
+        <div class="max-w-xl mx-auto w-full glass-panel rounded-2xl p-4 text-white z-10 flex items-center justify-between gap-4">
+            <div>
+                <h3 id="lbTitle" class="font-bold text-base sm:text-lg text-white truncate">Photo Title</h3>
+                <p id="lbPhotographer" class="text-xs sm:text-sm text-slate-300">By Photographer Name</p>
+            </div>
+            <button id="lbDownloadBtn" class="px-4 py-2 rounded-xl bg-brand-600 hover:bg-brand-500 text-white text-xs sm:text-sm font-semibold transition flex items-center space-x-2 shrink-0">
+                <i class="fa-solid fa-download"></i>
+                <span class="hidden sm:inline">Copy Link</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Toast Notification Banner -->
+    <div id="toast" class="fixed bottom-6 right-6 z-50 flex items-center space-x-2 px-4 py-3 rounded-xl bg-slate-900 text-white dark:bg-white dark:text-slate-900 shadow-xl opacity-0 pointer-events-none translate-y-4">
+        <i id="toastIcon" class="fa-solid fa-circle-check text-emerald-400 dark:text-emerald-600"></i>
+        <span id="toastMsg" class="text-xs font-semibold">Notification message</span>
+    </div>
+
+    <script>
+        // Gallery Data Source with high-res images from Unsplash
+        const galleryItems = [
+            {
+                id: "1",
+                title: "Mist Over Emerald Valley",
+                category: "Nature",
+                photographer: "Elena Rostova",
+                url: "https://images.unsplash.com/photo-1506744038136-46273834b3fb?auto=format&fit=crop&w=1200&q=80",
+                likes: 142
+            },
+            {
+                id: "2",
+                title: "Glass Skyward Structure",
+                category: "Architecture",
+                photographer: "Marcus Vance",
+                url: "https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?auto=format&fit=crop&w=1200&q=80",
+                likes: 89
+            },
+            {
+                id: "3",
+                title: "Golden Hour Portrait",
+                category: "Portraits",
+                photographer: "Sofia Chen",
+                url: "https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=1200&q=80",
+                likes: 215
+            },
+            {
+                id: "4",
+                title: "Neon Reflections at Night",
+                category: "Urban",
+                photographer: "Devon Miller",
+                url: "https://images.unsplash.com/photo-1519501025264-65ba15a82390?auto=format&fit=crop&w=1200&q=80",
+                likes: 178
+            },
+            {
+                id: "5",
+                title: "Majestic Snow Leopard",
+                category: "Wildlife",
+                photographer: "Lars Lindqvist",
+                url: "https://images.unsplash.com/photo-1561731216-c3a4d99437d5?auto=format&fit=crop&w=1200&q=80",
+                likes: 310
+            },
+            {
+                id: "6",
+                title: "Prismatic Geometric Flow",
+                category: "Abstract",
+                photographer: "Maya Lin",
+                url: "https://images.unsplash.com/photo-1541701494587-cb58502866ab?auto=format&fit=crop&w=1200&q=80",
+                likes: 95
+            },
+            {
+                id: "7",
+                title: "Serenity Lake Sunrise",
+                category: "Nature",
+                photographer: "Lucas Silva",
+                url: "https://images.unsplash.com/photo-1511884642898-4c92249e20b6?auto=format&fit=crop&w=1200&q=80",
+                likes: 264
+            },
+            {
+                id: "8",
+                title: "Spiral Concrete Staircase",
+                category: "Architecture",
+                photographer: "Amara Patel",
+                url: "https://images.unsplash.com/photo-1513694203232-719a280e022f?auto=format&fit=crop&w=1200&q=80",
+                likes: 112
+            },
+            {
+                id: "9",
+                title: "Studio Lighting Profile",
+                category: "Portraits",
+                photographer: "Antoine Dubois",
+                url: "https://images.unsplash.com/photo-1507003211169-0a1dd7228f2d?auto=format&fit=crop&w=1200&q=80",
+                likes: 198
+            },
+            {
+                id: "10",
+                title: "Tokyo Alley Lights",
+                category: "Urban",
+                photographer: "Kenji Sato",
+                url: "https://images.unsplash.com/photo-1503899036084-c55cdd92da26?auto=format&fit=crop&w=1200&q=80",
+                likes: 245
+            },
+            {
+                id: "11",
+                title: "Eagle in Flight",
+                category: "Wildlife",
+                photographer: "Sarah Jenkins",
+                url: "https://images.unsplash.com/photo-1611095973763-414019e72400?auto=format&fit=crop&w=1200&q=80",
+                likes: 187
+            },
+            {
+                id: "12",
+                title: "Fluid Acrylic Motion",
+                category: "Abstract",
+                photographer: "Oliver Wright",
+                url: "https://images.unsplash.com/photo-1579783902614-a3fb3927b675?auto=format&fit=crop&w=1200&q=80",
+                likes: 134
+            }
+        ];
+
+        // App State
+        let currentCategory = 'all';
+        let searchQuery = '';
+        let favorites = JSON.parse(localStorage.getItem('gallery_favorites')) || [];
+        let filteredItems = [...galleryItems];
+        let currentLightboxIndex = 0;
+        let isZoomed = false;
+
+        // DOM Elements
+        const galleryGrid = document.getElementById('galleryGrid');
+        const emptyState = document.getElementById('emptyState');
+        const searchInput = document.getElementById('searchInput');
+        const clearSearchBtn = document.getElementById('clearSearchBtn');
+        const categoriesContainer = document.getElementById('categoriesContainer');
+        const favCountSpan = document.getElementById('favCount');
+        const themeToggleBtn = document.getElementById('themeToggle');
+        const themeIcon = document.getElementById('themeIcon');
+
+        // Lightbox Elements
+        const lightboxModal = document.getElementById('lightboxModal');
+        const lbImage = document.getElementById('lbImage');
+        const lbCounter = document.getElementById('lbCounter');
+        const lbCategory = document.getElementById('lbCategory');
+        const lbTitle = document.getElementById('lbTitle');
+        const lbPhotographer = document.getElementById('lbPhotographer');
+        const lbCloseBtn = document.getElementById('lbCloseBtn');
+        const lbPrevBtn = document.getElementById('lbPrevBtn');
+        const lbNextBtn = document.getElementById('lbNextBtn');
+        const lbZoomBtn = document.getElementById('lbZoomBtn');
+        const lbFavBtn = document.getElementById('lbFavBtn');
+        const lbDownloadBtn = document.getElementById('lbDownloadBtn');
+
+        // Initialization
+        window.addEventListener('DOMContentLoaded', () => {
+            initTheme();
+            updateFavCount();
+            renderGallery();
+            setupEventListeners();
+        });
+
+        // Theme Initialization
+        function initTheme() {
+            if (localStorage.getItem('color-theme') === 'light') {
+                document.documentElement.classList.remove('dark');
+                themeIcon.className = 'fa-solid fa-sun text-lg text-amber-500';
+            } else {
+                document.documentElement.classList.add('dark');
+                themeIcon.className = 'fa-solid fa-moon text-lg';
+            }
+        }
+
+        // Toggle Dark/Light Theme
+        themeToggleBtn.addEventListener('click', () => {
+            if (document.documentElement.classList.contains('dark')) {
+                document.documentElement.classList.remove('dark');
+                localStorage.setItem('color-theme', 'light');
+                themeIcon.className = 'fa-solid fa-sun text-lg text-amber-500';
+            } else {
+                document.documentElement.classList.add('dark');
+                localStorage.setItem('color-theme', 'dark');
+                themeIcon.className = 'fa-solid fa-moon text-lg';
+            }
+        });
+
+        // Update gallery based on active filter and search terms
+        function filterGallery() {
+            filteredItems = galleryItems.filter(item => {
+                const matchesCategory = (currentCategory === 'all') 
+                    ? true 
+                    : (currentCategory === 'favorites') 
+                        ? favorites.includes(item.id) 
+                        : item.category.toLowerCase() === currentCategory.toLowerCase();
+
+                const matchesSearch = item.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                      item.category.toLowerCase().includes(searchQuery.toLowerCase()) ||
+                                      item.photographer.toLowerCase().includes(searchQuery.toLowerCase());
+
+                return matchesCategory && matchesSearch;
+            });
+
+            renderGallery();
+        }
+
+        // Render Cards to DOM
+        function renderGallery() {
+            galleryGrid.innerHTML = '';
+
+            if (filteredItems.length === 0) {
+                emptyState.classList.remove('hidden');
+                galleryGrid.classList.add('hidden');
+                return;
+            }
+
+            emptyState.classList.add('hidden');
+            galleryGrid.classList.remove('hidden');
+
+            filteredItems.forEach((item, index) => {
+                const isFav = favorites.includes(item.id);
+                
+                const card = document.createElement('div');
+                card.className = 'gallery-card relative group rounded-2xl overflow-hidden bg-slate-200 dark:bg-slate-900 shadow-md border border-slate-200/60 dark:border-slate-800/60 cursor-pointer aspect-[4/5]';
+                card.setAttribute('data-id', item.id);
+
+                card.innerHTML = `
+                    <img src="${item.url}" alt="${item.title}" loading="lazy" class="w-full h-full object-cover">
+                    
+                    <!-- Top Category Badge & Quick Like -->
+                    <div class="absolute top-3 left-3 right-3 flex items-center justify-between z-10 transition-opacity duration-300 opacity-90 group-hover:opacity-100">
+                        <span class="text-xs font-semibold px-2.5 py-1 rounded-md bg-slate-950/60 backdrop-blur-md text-white border border-white/10">
+                            ${item.category}
+                        </span>
+                        <button onclick="toggleFavorite(event, '${item.id}')" class="p-2 rounded-full bg-slate-950/60 backdrop-blur-md text-white hover:bg-slate-950/80 transition-colors border border-white/10">
+                            <i class="${isFav ? 'fa-solid text-red-500' : 'fa-regular'} fa-heart"></i>
+                        </button>
+                    </div>
+
+                    <!-- Card Gradient Overlay & Meta Details -->
+                    <div class="absolute inset-0 bg-gradient-to-t from-slate-950/90 via-slate-950/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex flex-col justify-end p-5 text-white">
+                        <h3 class="font-bold text-lg leading-snug transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300">${item.title}</h3>
+                        <p class="text-xs text-slate-300 mt-1 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300 delay-75">
+                            by <span class="font-medium text-white">${item.photographer}</span>
+                        </p>
+                        
+                        <div class="mt-4 flex items-center justify-between pt-3 border-t border-white/15 transform translate-y-2 group-hover:translate-y-0 transition-transform duration-300 delay-100">
+                            <span class="text-xs text-slate-300">
+                                <i class="fa-solid fa-heart text-red-400 mr-1"></i> ${item.likes + (isFav ? 1 : 0)}
+                            </span>
+                            <span class="text-xs font-semibold flex items-center text-cyan-400 group-hover:underline">
+                                Expand <i class="fa-solid fa-arrow-up-right-from-square ml-1.5 text-[10px]"></i>
+                            </span>
+                        </div>
+                    </div>
+                `;
+
+                // Click card to open Lightbox
+                card.addEventListener('click', (e) => {
+                    if (!e.target.closest('button')) {
+                        openLightbox(index);
+                    }
+                });
+
+                galleryGrid.appendChild(card);
+            });
+        }
+
+        // Favorites Handling
+        function toggleFavorite(e, id) {
+            e.stopPropagation();
+            const index = favorites.indexOf(id);
+            if (index > -1) {
+                favorites.splice(index, 1);
+                showToast("Removed from favorites", "info");
+            } else {
+                favorites.push(id);
+                showToast("Added to favorites!", "success");
+            }
+
+            localStorage.setItem('gallery_favorites', JSON.stringify(favorites));
+            updateFavCount();
+            
+            // Re-render gallery or update state
+            if (currentCategory === 'favorites') {
+                filterGallery();
+            } else {
+                renderGallery();
+            }
+
+            // Sync lightbox favorite button state if open
+            if (!lightboxModal.classList.contains('hidden')) {
+                updateLightboxFavButton();
+            }
+        }
+
+        function updateFavCount() {
+            favCountSpan.textContent = favorites.length;
+        }
+
+        // Lightbox Operations
+        function openLightbox(index) {
+            currentLightboxIndex = index;
+            updateLightboxContent();
+
+            lightboxModal.classList.remove('hidden');
+            setTimeout(() => {
+                lightboxModal.classList.remove('opacity-0');
+            }, 10);
+            
+            document.body.style.overflow = 'hidden'; // Prevent page scrolling
+        }
+
+        function closeLightbox() {
+            lightboxModal.classList.add('opacity-0');
+            setTimeout(() => {
+                lightboxModal.classList.add('hidden');
+                resetZoom();
+            }, 300);
+            document.body.style.overflow = 'auto';
+        }
+
+        function updateLightboxContent() {
+            const item = filteredItems[currentLightboxIndex];
+            if (!item) return;
+
+            resetZoom();
+
+            // Set image & metadata
+            lbImage.src = item.url;
+            lbImage.alt = item.title;
+            lbTitle.textContent = item.title;
+            lbPhotographer.textContent = `By ${item.photographer}`;
+            lbCategory.textContent = item.category;
+            lbCounter.textContent = `Image ${currentLightboxIndex + 1} of ${filteredItems.length}`;
+
+            updateLightboxFavButton();
+        }
+
+        function updateLightboxFavButton() {
+            const currentItem = filteredItems[currentLightboxIndex];
+            if (!currentItem) return;
+            const isFav = favorites.includes(currentItem.id);
+            lbFavBtn.innerHTML = `<i class="${isFav ? 'fa-solid text-red-500' : 'fa-regular'} fa-heart text-base"></i>`;
+        }
+
+        function navigateLightbox(direction) {
+            if (filteredItems.length === 0) return;
+            
+            currentLightboxIndex = (currentLightboxIndex + direction + filteredItems.length) % filteredItems.length;
+            
+            // Fade effect transition for image swap
+            lbImage.style.opacity = '0.4';
+            setTimeout(() => {
+                updateLightboxContent();
+                lbImage.style.opacity = '1';
+            }, 150);
+        }
+
+        function resetZoom() {
+            isZoomed = false;
+            lbImage.classList.remove('zoomed-image');
+            lbImage.classList.remove('cursor-zoom-out');
+            lbImage.classList.add('cursor-zoom-in');
+            lbZoomBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass-plus text-base"></i>';
+        }
+
+        function toggleZoom() {
+            isZoomed = !isZoomed;
+            if (isZoomed) {
+                lbImage.classList.add('zoomed-image');
+                lbImage.classList.remove('cursor-zoom-in');
+                lbImage.classList.add('cursor-zoom-out');
+                lbZoomBtn.innerHTML = '<i class="fa-solid fa-magnifying-glass-minus text-base"></i>';
+            } else {
+                resetZoom();
+            }
+        }
+
+        function setupEventListeners() {
+            // Category Filter Tab Clicks
+            categoriesContainer.addEventListener('click', (e) => {
+                const btn = e.target.closest('.filter-btn');
+                if (!btn) return;
+
+                document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+
+                currentCategory = btn.getAttribute('data-category');
+                filterGallery();
+            });
+
+            // Search Bar Input Event
+            searchInput.addEventListener('input', (e) => {
+                searchQuery = e.target.value.trim();
+                if (searchQuery.length > 0) {
+                    clearSearchBtn.classList.remove('hidden');
+                } else {
+                    clearSearchBtn.classList.add('hidden');
+                }
+                filterGallery();
+            });
+
+            // Clear Search
+            clearSearchBtn.addEventListener('click', () => {
+                searchInput.value = '';
+                searchQuery = '';
+                clearSearchBtn.classList.add('hidden');
+                filterGallery();
+            });
+
+            // Lightbox Controls
+            lbCloseBtn.addEventListener('click', closeLightbox);
+            lbPrevBtn.addEventListener('click', () => navigateLightbox(-1));
+            lbNextBtn.addEventListener('click', () => navigateLightbox(1));
+            lbZoomBtn.addEventListener('click', toggleZoom);
+            lbImage.addEventListener('click', toggleZoom);
+
+            lbFavBtn.addEventListener('click', () => {
+                const currentItem = filteredItems[currentLightboxIndex];
+                if (currentItem) {
+                    toggleFavorite(event, currentItem.id);
+                }
+            });
+
+            // Download / Copy Link Button
+            lbDownloadBtn.addEventListener('click', () => {
+                const currentItem = filteredItems[currentLightboxIndex];
+                if (currentItem) {
+                    // Fallback copy implementation
+                    const dummy = document.createElement('input');
+                    document.body.appendChild(dummy);
+                    dummy.value = currentItem.url;
+                    dummy.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(dummy);
+                    
+                    showToast("Image link copied to clipboard!", "success");
+                }
+            });
+
+            // Close lightbox on clicking dark backdrop overlay
+            lightboxModal.addEventListener('click', (e) => {
+                if (e.target === lightboxModal || e.target.id === 'lbImageContainer') {
+                    closeLightbox();
+                }
+            });
+
+            // Keyboard Shortcuts for Lightbox Navigation
+            document.addEventListener('keydown', (e) => {
+                if (lightboxModal.classList.contains('hidden')) return;
+
+                if (e.key === 'Escape') {
+                    closeLightbox();
+                } else if (e.key === 'ArrowLeft') {
+                    navigateLightbox(-1);
+                } else if (e.key === 'ArrowRight') {
+                    navigateLightbox(1);
+                }
+            });
+        }
+
+        // Global Reset Helper
+        function resetGallery() {
+            searchInput.value = '';
+            searchQuery = '';
+            clearSearchBtn.classList.add('hidden');
+            currentCategory = 'all';
+            
+            document.querySelectorAll('.filter-btn').forEach(b => b.classList.remove('active'));
+            document.querySelector('[data-category="all"]').classList.add('active');
+            
+            filterGallery();
+        }
+
+        // Toast Notification Helper
+        function showToast(message, type = "success") {
+            const toast = document.getElementById('toast');
+            const toastMsg = document.getElementById('toastMsg');
+            const toastIcon = document.getElementById('toastIcon');
+
+            toastMsg.textContent = message;
+
+            if (type === "success") {
+                toastIcon.className = "fa-solid fa-circle-check text-emerald-400 dark:text-emerald-500";
+            } else {
+                toastIcon.className = "fa-solid fa-circle-info text-cyan-400 dark:text-cyan-500";
+            }
+
+            toast.classList.remove('opacity-0', 'pointer-events-none', 'translate-y-4');
+            toast.classList.add('opacity-100', 'translate-y-0');
+
+            setTimeout(() => {
+                toast.classList.remove('opacity-100', 'translate-y-0');
+                toast.classList.add('opacity-0', 'pointer-events-none', 'translate-y-4');
+            }, 2500);
+        }
+    </script>
+</body>
+</html>
